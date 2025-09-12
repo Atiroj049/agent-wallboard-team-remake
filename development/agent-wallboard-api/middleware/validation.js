@@ -1,11 +1,9 @@
-// middleware/validation.js - Professional validation with Joi
 const Joi = require('joi');
 const { AGENT_STATUS, DEPARTMENTS } = require('../utils/constants');
 const { sendError } = require('../utils/apiResponse');
 
-// Validation schemas
+// ✅ Validation schemas
 const schemas = {
-  // ✅ ให้ code สำเร็จเป็นตัวอย่าง
   agent: Joi.object({
     agentCode: Joi.string()
       .pattern(/^[A-Z]\d{3}$/)
@@ -48,21 +46,26 @@ const schemas = {
       })
   }),
 
-  // 🔄 TODO #4: นักศึกษาทำเอง (15 นาที)
+  // ✅ TODO #4: statusUpdate schema
   statusUpdate: Joi.object({
-    // TODO: สร้าง validation สำหรับ status update
-    // Requirements:
-    // 1. status ต้องเป็น valid AGENT_STATUS
-    // 2. reason เป็น optional string ไม่เกิน 200 ตัวอักษร
-    // 3. ใส่ error messages ที่เหมาะสม
-    
-    // Hint structure:
-    // status: Joi.string().valid(...).required().messages({...}),
-    // reason: Joi.string().max(200).optional().messages({...})
+    status: Joi.string()
+      .valid(...Object.values(AGENT_STATUS))
+      .required()
+      .messages({
+        'any.only': `Status must be one of: ${Object.values(AGENT_STATUS).join(', ')}`,
+        'any.required': 'Status is required'
+      }),
+
+    reason: Joi.string()
+      .max(200)
+      .optional()
+      .messages({
+        'string.max': 'Reason cannot exceed 200 characters'
+      })
   })
 };
 
-// Validation middleware functions
+// ✅ Validation middleware
 const validateAgent = (req, res, next) => {
   const { error, value } = schemas.agent.validate(req.body, {
     abortEarly: false,
@@ -83,12 +86,25 @@ const validateAgent = (req, res, next) => {
   next();
 };
 
-// 🔄 TODO #5: นักศึกษาทำเอง (10 นาที)
+// ✅ TODO #5: validateStatusUpdate
 const validateStatusUpdate = (req, res, next) => {
-  // TODO: implement ตาม pattern ของ validateAgent
-  // Hint: ใช้ schemas.statusUpdate แทน schemas.agent
-  
-  return sendError(res, 'TODO: Implement validateStatusUpdate middleware', 501);
+  const { error, value } = schemas.statusUpdate.validate(req.body, {
+    abortEarly: false,
+    stripUnknown: true
+  });
+
+  if (error) {
+    const validationErrors = error.details.map(detail => ({
+      field: detail.path[0],
+      message: detail.message
+    }));
+
+    console.log('❌ Status validation failed:', validationErrors);
+    return sendError(res, 'Status validation failed', 400, validationErrors);
+  }
+
+  req.body = value;
+  next();
 };
 
 module.exports = {

@@ -49,6 +49,6 @@ router.get('/docs', (req, res) => {
 });
 
 // Mount agent routes
-router.use('/agents', agentRoutes);
+router.use('/v1/agents', agentRoutes);
 
 module.exports = router;
