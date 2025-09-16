@@ -1,105 +1,92 @@
-const { Agent, agents } = require('../models/Agent');
+const Agent = require('../models/Agent');
 const { AGENT_STATUS, VALID_STATUS_TRANSITIONS, API_MESSAGES } = require('../utils/constants');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 const agentController = {
-  // ✅ ตัวอย่างที่ให้มา
-  getAgentById: (req, res) => {
+  // ✅ GET /api/agents/:id
+  getAgentById: async (req, res) => {
     try {
       const { id } = req.params;
-      const agent = agents.get(id);
+      const agent = await Agent.findById(id);
 
       if (!agent) {
         return sendError(res, API_MESSAGES.AGENT_NOT_FOUND, 404);
       }
 
       console.log(`📋 Retrieved agent: ${agent.agentCode}`);
-      return sendSuccess(res, 'Agent retrieved successfully', agent.toJSON());
+      return sendSuccess(res, 'Agent retrieved successfully', agent);
     } catch (error) {
       console.error('Error in getAgentById:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   },
 
-  // ✅ TODO #1: getAllAgents
-  getAllAgents: (req, res) => {
+  // ✅ GET /api/agents?status=Available&department=Sales
+  getAllAgents: async (req, res) => {
     try {
       const { status, department } = req.query;
-      let agentList = Array.from(agents.values());
+      const filters = {};
+      if (status) filters.status = status;
+      if (department) filters.department = department;
 
-      if (status) {
-        agentList = agentList.filter(agent => agent.status === status);
-      }
-      if (department) {
-        agentList = agentList.filter(agent => agent.department === department);
-      }
-
-      return sendSuccess(res, 'Agents retrieved successfully',
-        agentList.map(agent => agent.toJSON())
-      );
+      const agents = await Agent.find(filters);
+      return sendSuccess(res, 'Agents retrieved successfully', agents);
     } catch (error) {
       return sendError(res, 'Failed to retrieve agents', 500, error);
     }
   },
 
-  // ✅ TODO #2: createAgent
-  createAgent: (req, res) => {
+  // ✅ POST /api/agents
+  createAgent: async (req, res) => {
     try {
-      const agentData = req.body;
+      const { agentCode } = req.body;
 
-      const existingAgent = Array.from(agents.values())
-        .find(agent => agent.agentCode === agentData.agentCode);
-
+      const existingAgent = await Agent.findOne({ agentCode });
       if (existingAgent) {
-        return sendError(res, `Agent code ${agentData.agentCode} already exists`, 409);
+        return sendError(res, `Agent code ${agentCode} already exists`, 409);
       }
 
-      const newAgent = new Agent(agentData);
-      agents.set(newAgent.id, newAgent);
+      const newAgent = new Agent(req.body);
+      await newAgent.save();
 
       console.log(`➕ Created new agent: ${newAgent.agentCode}`);
-      return sendSuccess(res, API_MESSAGES.AGENT_CREATED, newAgent.toJSON(), 201);
+      return sendSuccess(res, API_MESSAGES.AGENT_CREATED, newAgent, 201);
     } catch (error) {
       console.error('Error in createAgent:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   },
 
-  // ✅ ให้ code สำเร็จ
-  updateAgent: (req, res) => {
+  // ✅ PUT /api/agents/:id
+  updateAgent: async (req, res) => {
     try {
       const { id } = req.params;
-      const agent = agents.get(id);
+      const updateData = req.body;
+
+      const agent = await Agent.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true
+      });
 
       if (!agent) {
         return sendError(res, API_MESSAGES.AGENT_NOT_FOUND, 404);
       }
 
-      const { name, email, department, skills } = req.body;
-
-      if (name) agent.name = name;
-      if (email) agent.email = email;
-      if (department) agent.department = department;
-      if (skills) agent.skills = skills;
-
-      agent.updatedAt = new Date();
-
       console.log(`✏️ Updated agent: ${agent.agentCode}`);
-      return sendSuccess(res, API_MESSAGES.AGENT_UPDATED, agent.toJSON());
+      return sendSuccess(res, API_MESSAGES.AGENT_UPDATED, agent);
     } catch (error) {
       console.error('Error in updateAgent:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   },
 
-  // ✅ TODO #3: updateAgentStatus
-  updateAgentStatus: (req, res) => {
+  // ✅ PATCH /api/agents/:id/status
+  updateAgentStatus: async (req, res) => {
     try {
       const { id } = req.params;
       const { status, reason } = req.body;
 
-      const agent = agents.get(id);
-
+      const agent = await Agent.findById(id);
       if (!agent) {
         return sendError(res, API_MESSAGES.AGENT_NOT_FOUND, 404);
       }
@@ -111,55 +98,62 @@ const agentController = {
         );
       }
 
-      const currentStatus = agent.status;
-      const validTransitions = VALID_STATUS_TRANSITIONS[currentStatus];
-
+      const validTransitions = VALID_STATUS_TRANSITIONS[agent.status];
       if (!validTransitions.includes(status)) {
         return sendError(res,
-          `Cannot change from ${currentStatus} to ${status}. Valid: ${validTransitions.join(', ')}`,
+          `Cannot change from ${agent.status} to ${status}. Valid: ${validTransitions.join(', ')}`,
           400
         );
       }
 
+      // เรียกเมธอดของ schema
       agent.updateStatus(status, reason);
+      await agent.save();
 
-      console.log(`🔄 Status changed for ${agent.agentCode}: ${currentStatus} → ${status}`);
-      return sendSuccess(res, API_MESSAGES.AGENT_STATUS_UPDATED, agent.toJSON());
+      // ✅ Emit WebSocket event
+      const io = req.app.get('io');
+      io.emit('agentStatusChanged', {
+        agentId: agent._id,
+        agentCode: agent.agentCode,
+        newStatus: agent.status,
+        timestamp: new Date()
+      });
+
+      console.log(`🔄 Status changed for ${agent.agentCode}: ${status}`);
+      return sendSuccess(res, API_MESSAGES.AGENT_STATUS_UPDATED, agent);
     } catch (error) {
       console.error('Error in updateAgentStatus:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   },
 
-  // ✅ deleteAgent
-  deleteAgent: (req, res) => {
+  // ✅ DELETE /api/agents/:id
+  deleteAgent: async (req, res) => {
     try {
       const { id } = req.params;
-      const agent = agents.get(id);
 
+      const agent = await Agent.findByIdAndDelete(id);
       if (!agent) {
         return sendError(res, API_MESSAGES.AGENT_NOT_FOUND, 404);
       }
-
-      agents.delete(id);
 
       console.log(`🗑️ Deleted agent: ${agent.agentCode} - ${agent.name}`);
       return sendSuccess(res, API_MESSAGES.AGENT_DELETED);
     } catch (error) {
       console.error('Error in deleteAgent:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   },
 
-  // ✅ getStatusSummary
-  getStatusSummary: (req, res) => {
+  // ✅ GET /api/agents/status/summary
+  getStatusSummary: async (req, res) => {
     try {
-      const agentList = Array.from(agents.values());
-      const totalAgents = agentList.length;
+      const allAgents = await Agent.find();
+      const totalAgents = allAgents.length;
 
       const statusCounts = {};
       Object.values(AGENT_STATUS).forEach(status => {
-        statusCounts[status] = agentList.filter(agent => agent.status === status).length;
+        statusCounts[status] = allAgents.filter(agent => agent.status === status).length;
       });
 
       const statusPercentages = {};
@@ -177,7 +171,7 @@ const agentController = {
       return sendSuccess(res, 'Status summary retrieved successfully', summary);
     } catch (error) {
       console.error('Error in getStatusSummary:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500, error);
     }
   }
 };
