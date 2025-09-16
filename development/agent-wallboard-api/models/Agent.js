@@ -1,32 +1,49 @@
-// models/Agent.js - Agent Model (รองรับทั้ง Phase 1 และ Phase 2)
+// models/Agent.js - Enhanced Agent model with methods
+// 👉 ไฟล์นี้ใช้สร้าง "Agent" object สำหรับเก็บข้อมูลของพนักงาน call center
+// 👉 ใน Phase 1 ยังไม่ใช้ Database จริง แต่จะเก็บใน memory (Map) ก่อน
 
-const mongoose = require('mongoose');
-
-// ✅ Config: Toggle database usage
-const isDatabaseEnabled = false; // เปลี่ยนเป็น true เมื่อต้องการใช้ MongoDB
-
-// ✅ Phase 1: Agent class (ใช้กับ in-memory storage)
 class Agent {
   constructor(data) {
+    // สร้าง unique id (ถ้าไม่มีส่งเข้ามา) ด้วย generateId()
     this.id = data.id || this.generateId();
+
+    // รหัสประจำตัว agent (เช่น A001)
     this.agentCode = data.agentCode;
+
+    // ชื่อ-อีเมล-แผนก
     this.name = data.name;
     this.email = data.email;
     this.department = data.department || 'General';
+
+    // ความสามารถ (skills เช่น ภาษา, ความรู้เฉพาะด้าน)
     this.skills = data.skills || [];
+
+    // สถานะเริ่มต้น = Available
     this.status = data.status || 'Available';
+
+    // บ่งบอกว่า agent ยัง active อยู่ไหม
     this.isActive = data.isActive !== undefined ? data.isActive : true;
+
+    // เวลาที่ login เข้าระบบ
     this.loginTime = data.loginTime || null;
+
+    // เวลาล่าสุดที่เปลี่ยนสถานะ
     this.lastStatusChange = new Date();
+
+    // เก็บประวัติการเปลี่ยนสถานะทั้งหมด
     this.statusHistory = data.statusHistory || [];
+
+    // เวลาสร้างและอัพเดทล่าสุด
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = new Date();
   }
 
+  // ฟังก์ชันสร้าง id แบบสุ่ม ใช้ใน Phase 1 (ยังไม่ใช้ database)
   generateId() {
     return Date.now() + Math.random().toString(36).substr(2, 9);
   }
 
+  // ฟังก์ชันอัพเดทสถานะ พร้อมบันทึกประวัติ
   updateStatus(newStatus, reason = null) {
     this.statusHistory.push({
       from: this.status,
@@ -40,6 +57,7 @@ class Agent {
     this.updatedAt = new Date();
   }
 
+  // ฟังก์ชันส่งข้อมูลออกมาในรูป JSON (สำหรับ API response)
   toJSON() {
     return {
       id: this.id,
@@ -57,21 +75,21 @@ class Agent {
     };
   }
 
+  // ฟังก์ชันให้ admin ดูประวัติการเปลี่ยนสถานะ
   getStatusHistory() {
     return this.statusHistory;
   }
 }
 
-// ✅ Phase 1: In-memory data
+// ✅ เก็บ agent ทั้งหมดไว้ใน Map (ทำหน้าที่เหมือน database ชั่วคราว)
 const agents = new Map();
 
-// ✅ Sample Data (ใช้สำหรับทดสอบ)
+// ✅ สร้าง sample data สำหรับทดสอบ API
 function initializeSampleData() {
-  if (isDatabaseEnabled) return; // ถ้าเปิดใช้ DB ไม่ต้อง initialize
   const sampleAgents = [
     {
       agentCode: 'A001',
-      name: 'John Doe',
+      name: 'John Doe', 
       email: 'john.doe@company.com',
       department: 'Sales',
       skills: ['Thai', 'English', 'Sales'],
@@ -80,7 +98,7 @@ function initializeSampleData() {
     {
       agentCode: 'A002',
       name: 'Jane Smith',
-      email: 'jane.smith@company.com',
+      email: 'jane.smith@company.com', 
       department: 'Support',
       skills: ['Thai', 'Technical Support'],
       status: 'Busy'
@@ -89,12 +107,13 @@ function initializeSampleData() {
       agentCode: 'S001',
       name: 'Sarah Wilson',
       email: 'sarah.wilson@company.com',
-      department: 'Technical',
+      department: 'Technical', 
       skills: ['English', 'Technical', 'Supervisor'],
       status: 'Available'
     }
   ];
 
+  // เพิ่ม agent ทั้งหมดเข้า Map
   sampleAgents.forEach(data => {
     const agent = new Agent(data);
     agents.set(agent.id, agent);
@@ -103,36 +122,7 @@ function initializeSampleData() {
   console.log(`✅ Initialized ${agents.size} sample agents`);
 }
 
-// ✅ Optional: Mongoose schema (เตรียมไว้สำหรับ Phase 2)
-const agentSchema = new mongoose.Schema({
-  agentCode: { type: String, required: true },
-  name: String,
-  email: String,
-  department: { type: String, default: 'General' },
-  skills: [String],
-  status: { type: String, default: 'Available' },
-  isActive: { type: Boolean, default: true },
-  loginTime: Date,
-  lastStatusChange: Date,
-  statusHistory: [
-    {
-      from: String,
-      to: String,
-      reason: String,
-      timestamp: Date
-    }
-  ],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: Date
-});
+// เรียกฟังก์ชันสร้าง sample data ตอนเริ่มต้น
+initializeSampleData();
 
-const AgentModel = mongoose.models.Agent || mongoose.model('Agent', agentSchema);
-
-// ✅ Export
-module.exports = {
-  Agent,
-  agents,
-  initializeSampleData,
-  AgentModel,
-  isDatabaseEnabled
-};
+module.exports = { Agent, agents };
