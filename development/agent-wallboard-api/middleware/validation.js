@@ -12,7 +12,7 @@ const schemas = {
         'string.pattern.base': 'Agent code must be in format A001 (letter + 3 digits)',
         'any.required': 'Agent code is required'
       }),
-    
+
     name: Joi.string()
       .min(2)
       .max(100)
@@ -22,7 +22,7 @@ const schemas = {
         'string.max': 'Name cannot exceed 100 characters',
         'any.required': 'Name is required'
       }),
-    
+
     email: Joi.string()
       .email()
       .required()
@@ -30,14 +30,14 @@ const schemas = {
         'string.email': 'Please provide a valid email address',
         'any.required': 'Email is required'
       }),
-    
+
     department: Joi.string()
       .valid(...DEPARTMENTS)
       .default('General')
       .messages({
         'any.only': `Department must be one of: ${DEPARTMENTS.join(', ')}`
       }),
-    
+
     skills: Joi.array()
       .items(Joi.string().min(2).max(50))
       .default([])
@@ -58,7 +58,7 @@ const schemas = {
 
     reason: Joi.string()
       .max(200)
-      .optional()
+      .allow('', null)
       .messages({
         'string.max': 'Reason cannot exceed 200 characters'
       })

@@ -73,11 +73,7 @@ const agentController = {
       agents.set(newAgent.id, newAgent);
 
       console.log(`➕ Created new agent: ${newAgent.agentCode} - ${newAgent.name}`);
-      return res.status(201).json({
-        success: true,
-        message: 'Agent created successfully',
-        data: newAgent.toJSON()
-      });
+      return sendSuccess(res, API_MESSAGES.AGENT_CREATED, newAgent.toJSON(), 201);
     } catch (error) {
       console.error('Error in createAgent:', error);
       return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
@@ -144,7 +140,7 @@ const agentController = {
       agent.updateStatus(status, reason);
 
       console.log(`🔄 Updated status for agent ${agent.agentCode}: ${currentStatus} -> ${status}`);
-      return sendSuccess(res, API_MESSAGES.AGENT_STATUS_UPDATED, agent.toJSON());
+      return sendSuccess(res, API_MESSAGES.STATUS_UPDATED, agent.toJSON());
     } catch (error) {
       console.error('Error in updateAgentStatus:', error);
       return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
